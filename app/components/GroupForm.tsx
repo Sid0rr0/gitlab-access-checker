@@ -1,34 +1,62 @@
 'use client'
 
 import { useState } from 'react'
-import { getAllGroupsAndProjects } from '@/app/useGitLabAPI'
-import {
-  useQuery,
-
-} from '@tanstack/react-query'
+import { getAllGroupsAndProjectsDFS, getAllGroupsAndProjectsDescendant } from '@/app/useGitLabAPI'
+import { useQuery } from '@tanstack/react-query'
 
 export default function Home() {
   const [groupID, setGroupID] = useState<string | null>(null)
+  const [searchMethod, setSearchMethod] = useState<'dfs' | 'descendant'>('descendant')
+  const [time, setTime] = useState<number | null>(null)
 
-  const query = useQuery({ queryKey: ['group-members'], queryFn: () => getAllGroupsAndProjects(Number(groupID)), enabled: !!groupID })
+  const query = useQuery({
+    queryKey: ['group-members'],
+    queryFn: async () => {
+      const t0 = performance.now()
+      const data = searchMethod === 'dfs' ? await getAllGroupsAndProjectsDFS(Number(groupID)) : await getAllGroupsAndProjectsDescendant(Number(groupID))
+      const t1 = performance.now()
+      setTime(t1 - t0)
+      return data
+    },
+    enabled: !!groupID,
+  })
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const input = event.currentTarget.querySelector('input') as HTMLInputElement
-    const groupID = input.value.trim()
-    setGroupID(groupID)
+    const formData = new FormData(event.currentTarget)
+    const groupID = formData.get('group-id') as string
+    setGroupID(groupID.trim())
+    const searchMethodOption = formData.get('search-method') as string
+    setSearchMethod(searchMethodOption === 'dfs' ? 'dfs' : 'descendant')
+    if (query.isFetched) {
+      query.refetch()
+    }
   }
 
   return (
     <>
       <form onSubmit={handleSubmit}>
-        <input type="text" className="bg-white text-slate-900" />
+        <input type="text" name="group-id" required className="bg-white text-slate-900" />
+        <select name="search-method">
+          <option value="dfs">DFS</option>
+          <option value="descendant">Descendant Groups</option>
+        </select>
         <button type="submit" className="ml-4 px-4 py-2 bg-blue-500 text-white rounded cursor-pointer">
           Check Access
         </button>
       </form>
 
-      {query.isLoading && <p className="text-gray-500">Loading...</p>}
+      {query.isFetching
+        ? <p className="text-gray-500">Loading...</p>
+        : (time && (
+            <p className="text-gray-500">
+              Time taken:
+              {' '}
+              {(time / 1000).toFixed(2)}
+              {' '}
+              s
+            </p>
+          ))}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-4xl">
         {query.data?.map(user => (
           <div key={user.id} className="bg-white p-6 rounded-lg border border-gray-200">

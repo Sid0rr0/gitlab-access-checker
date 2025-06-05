@@ -5,6 +5,8 @@ export default async function callGitLabAPI(endpoint: string) {
     },
   })
 
+  // TODO check for headers for pagination
+
   return await data.json()
 }
 
@@ -37,7 +39,7 @@ type UserData = {
   projects: string[]
 }
 
-export async function getAllGroupsAndProjects(initialGroupId: number) {
+export async function getAllGroupsAndProjectsDFS(initialGroupId: number) {
   const usersMap = new Map<number, UserData>()
 
   const visitedGroups = new Set<number>()
@@ -50,42 +52,11 @@ export async function getAllGroupsAndProjects(initialGroupId: number) {
     if (visitedGroups.has(group.id)) continue
 
     visitedGroups.add(group.id)
-    const members = await getGroupMembers(group.id)
-
-    for (const member of members || []) {
-      const existingUser = usersMap.get(member.id)
-      if (!existingUser) {
-        usersMap.set(member.id, {
-          id: member.id,
-          name: member.name,
-          username: member.username,
-          groups: [`${group.name} (${ACCESS_LEVELS[member.accessLevel]})`],
-          projects: [],
-        })
-      }
-      else {
-        existingUser.groups.push(`${group.name} (${ACCESS_LEVELS[member.accessLevel]})`)
-      }
-    }
+    await getGroupMembers(group, usersMap)
 
     const projects = await callGitLabAPI(`/groups/${group.id}/projects`)
     for (const project of projects || []) {
-      const projectMembers = await getProjectMembers(project.id)
-      for (const projectMember of projectMembers || []) {
-        const existingUser = usersMap.get(projectMember.id)
-        if (existingUser) {
-          existingUser.projects.push(project.name)
-        }
-        else {
-          usersMap.set(projectMember.id, {
-            id: projectMember.id,
-            name: projectMember.name,
-            username: projectMember.username,
-            groups: [],
-            projects: [project.name],
-          })
-        }
-      }
+      await getProjectMembers(project, usersMap)
     }
 
     const subgroups = await callGitLabAPI(`/groups/${group.id}/subgroups`)
@@ -94,7 +65,6 @@ export async function getAllGroupsAndProjects(initialGroupId: number) {
     }
   }
 
-  console.log('Users Map:', usersMap)
   return Array.from(usersMap.values())
 }
 
@@ -106,12 +76,69 @@ async function getGroupDetails(groupId: number) {
   }
 }
 
-async function getGroupMembers(groupId: number) {
-  const data = await callGitLabAPI(`/groups/${groupId}/members`)
-  return data?.map(user => ({ id: user.id, name: user.name, username: user.username, accessLevel: user.access_level }))
+async function getGroupMembers(group: { id: number, name: string }, usersMap: Map<number, UserData>) {
+  const members = await callGitLabAPI(`/groups/${group.id}/members`)
+
+  for (const member of members || []) {
+    const existingUser = usersMap.get(member.id)
+    if (!existingUser) {
+      usersMap.set(member.id, {
+        id: member.id,
+        name: member.name,
+        username: member.username,
+        groups: [`${group.name} (${ACCESS_LEVELS[member.accessLevel]})`],
+        projects: [],
+      })
+    }
+    else {
+      existingUser.groups.push(`${group.name} (${ACCESS_LEVELS[member.accessLevel]})`)
+    }
+  }
 }
 
-async function getProjectMembers(projectId: number) {
-  const data = await callGitLabAPI(`/projects/${projectId}/members`)
-  return data?.map(user => ({ id: user.id, name: user.name, username: user.username, accessLevel: user.access_level }))
+async function getProjectMembers(project: {
+  id: number
+  name: string
+}, usersMap: Map<number, UserData>) {
+  const projectMembers = await callGitLabAPI(`/projects/${project.id}/members`)
+  for (const projectMember of projectMembers || []) {
+    const existingUser = usersMap.get(projectMember.id)
+    if (existingUser) {
+      existingUser.projects.push(project.name)
+    }
+    else {
+      usersMap.set(projectMember.id, {
+        id: projectMember.id,
+        name: projectMember.name,
+        username: projectMember.username,
+        groups: [],
+        projects: [project.name],
+      })
+    }
+  }
+  // return data?.map((user: GitLabUser) => ({ id: user.id, name: user.name, username: user.username, accessLevel: user.access_level }))
+}
+
+async function getDescendantGroup(groupId: number) {
+  const data = await callGitLabAPI(`/groups/${groupId}/descendant_groups`)
+  return data?.map((subgroup: { id: number, name: string }) => ({ id: subgroup.id, name: subgroup.name }))
+}
+
+export async function getAllGroupsAndProjectsDescendant(initialGroupId: number) {
+  const usersMap = new Map<number, UserData>()
+
+  const initialGroup = await getGroupDetails(initialGroupId)
+  const subgroups = await getDescendantGroup(initialGroupId)
+  const allGroups = [initialGroup, ...(subgroups || [])]
+
+  for (const group of allGroups) {
+    await getGroupMembers(group, usersMap)
+
+    const projects = await callGitLabAPI(`/groups/${group.id}/projects`)
+    for (const project of projects || []) {
+      await getProjectMembers(project, usersMap)
+    }
+  }
+
+  return Array.from(usersMap.values())
 }
