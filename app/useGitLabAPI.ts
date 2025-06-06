@@ -43,6 +43,11 @@ type GitLabGroup = {
   name: string
 }
 
+type GitLabProject = {
+  id: number
+  name: string
+}
+
 type GitLabMember = {
   id: number
   name: string
@@ -167,8 +172,34 @@ async function getDescendantGroup(groupId: number) {
   return data?.map((subgroup: { id: number, name: string }) => ({ id: subgroup.id, name: subgroup.name }))
 }
 
-// Gets all subgroups with `/groups/:id/descendant_groups` and fetches group and projects members
+// Gets all subgroups with `/groups/:id/descendant_groups` and parrallelly fetches subgroups and projects members
 export async function getAllGroupsAndProjectsDescendant(initialGroupId: number) {
+  const usersMap = new Map<number, UserData>()
+
+  const initialGroup = await getGroupDetails(initialGroupId)
+  const subgroups = await getDescendantGroup(initialGroupId)
+  const allGroups = [initialGroup, ...subgroups]
+
+  const groupProcessingPromises = allGroups.map(async (group) => {
+    const [projectsResult] = await Promise.allSettled([
+      callGitLabAPI(`/groups/${group.id}/projects`),
+      getGroupMembers(group, usersMap),
+    ])
+
+    if (projectsResult.status === 'fulfilled' && projectsResult.value) {
+      const projects: GitLabProject[] = projectsResult.value
+      const projectMemberPromises = projects.map(project => getProjectMembers(project, usersMap))
+      await Promise.allSettled(projectMemberPromises)
+    }
+  })
+
+  await Promise.allSettled(groupProcessingPromises)
+
+  return Array.from(usersMap.values())
+}
+
+// Gets all subgroups with `/groups/:id/descendant_groups` and sequentially fetches subgroups and projects members
+export async function getAllGroupsAndProjectsDescendantSeq(initialGroupId: number) {
   const usersMap = new Map<number, UserData>()
 
   const initialGroup = await getGroupDetails(initialGroupId)
