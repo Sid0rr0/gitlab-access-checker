@@ -127,11 +127,13 @@ export default function Home() {
           </div>
         ))}
       </div>
-      <span>
-        Total users:
-        {' '}
-        {query.data?.length || 0}
-      </span>
+      {query.data && (
+        <span>
+          Total users:
+          {' '}
+          {query.data?.length || 0}
+        </span>
+      )}
     </>
   )
 }
