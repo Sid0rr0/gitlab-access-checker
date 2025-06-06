@@ -75,7 +75,7 @@ const ACCESS_LEVELS: AccessLevelMapping = {
   60: 'Admin',
 }
 
-type UserData = {
+export type UserData = {
   id: number
   name: string
   username: string
