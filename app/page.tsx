@@ -4,7 +4,7 @@ import {
   QueryClient,
   QueryClientProvider,
 } from '@tanstack/react-query'
-import GroupForm from './components/GroupForm'
+import GroupForm from '@/components/GroupForm'
 
 const queryClient = new QueryClient()
 
