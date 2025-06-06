@@ -7,7 +7,11 @@ export default async function callGitLabAPI(endpoint: string) {
 
   while (hasNextPage) {
     try {
-      const response = await fetch(process.env.NEXT_PUBLIC_GITLAB_API_URL as string + endpoint + '?per_page=100&page=' + page, {
+      const url = new URL(process.env.NEXT_PUBLIC_GITLAB_API_URL + endpoint)
+      url.searchParams.set('per_page', String(100))
+      url.searchParams.set('page', String(page))
+
+      const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${process.env.GITLAB_API_TOKEN}`,
         },
@@ -173,7 +177,7 @@ async function getDescendantGroup(groupId: number) {
 }
 
 // Gets all subgroups with `/groups/:id/descendant_groups` and parrallelly fetches subgroups and projects members
-export async function getAllGroupsAndProjectsDescendant(initialGroupId: number) {
+export async function getAllGroupsAndProjectsDescendantPar(initialGroupId: number) {
   const usersMap = new Map<number, UserData>()
 
   const initialGroup = await getGroupDetails(initialGroupId)
@@ -194,6 +198,41 @@ export async function getAllGroupsAndProjectsDescendant(initialGroupId: number) 
   })
 
   await Promise.allSettled(groupProcessingPromises)
+
+  return Array.from(usersMap.values())
+}
+
+// Gets all subgroups with `/groups/:id/descendant_groups` and parrallelly fetches subgroups and projects members
+export async function getAllGroupsAndProjectsDescendantV3(initialGroupId: number) {
+  const usersMap = new Map<number, UserData>()
+
+  const [
+    initialGroupDetailsResult,
+    descendantGroupsResult,
+    allProjectsInInitialGroupTreeResult, // Projects from initial group and its subgroups
+  ] = await Promise.allSettled([
+    getGroupDetails(initialGroupId),
+    getDescendantGroup(initialGroupId),
+    callGitLabAPI(`/groups/${initialGroupId}/projects?include_subgroups=true`),
+  ])
+
+  const allPromises: Promise<void>[] = []
+
+  if (initialGroupDetailsResult.status === 'fulfilled' && descendantGroupsResult.status === 'fulfilled') {
+    const allGroups = [initialGroupDetailsResult.value, ...descendantGroupsResult.value]
+    for (const group of allGroups) {
+      allPromises.push(getGroupMembers(group, usersMap))
+    }
+  }
+
+  if (allProjectsInInitialGroupTreeResult.status === 'fulfilled') {
+    const projects = allProjectsInInitialGroupTreeResult.value
+    for (const project of projects) {
+      allPromises.push(getProjectMembers(project, usersMap))
+    }
+  }
+
+  await Promise.allSettled(allPromises)
 
   return Array.from(usersMap.values())
 }

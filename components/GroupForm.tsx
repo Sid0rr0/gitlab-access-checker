@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { getAllGroupsAndProjectsDFS, getAllGroupsAndProjectsDescendant } from '@/app/useGitLabAPI'
+import { getAllGroupsAndProjectsDFS, getAllGroupsAndProjectsDescendantPar, getAllGroupsAndProjectsDescendantSeq, getAllGroupsAndProjectsDescendantV3 } from '@/app/useGitLabAPI'
 import { useQuery } from '@tanstack/react-query'
 import { Input } from '@/components/ui/input'
 import {
@@ -14,16 +14,34 @@ import {
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 
+type SearchMethod = 'dfs' | 'descendant-seq' | 'descendant-par' | 'descendant-v3'
+
 export default function Home() {
   const [groupID, setGroupID] = useState<string | null>(null)
-  const [searchMethod, setSearchMethod] = useState<'dfs' | 'descendant'>('descendant')
+  const [searchMethod, setSearchMethod] = useState<SearchMethod>('descendant-v3')
   const [time, setTime] = useState<number | null>(null)
 
   const query = useQuery({
     queryKey: ['group-members'],
     queryFn: async () => {
       const t0 = performance.now()
-      const data = searchMethod === 'dfs' ? await getAllGroupsAndProjectsDFS(Number(groupID)) : await getAllGroupsAndProjectsDescendant(Number(groupID))
+      let data = null
+      switch (searchMethod) {
+        case 'descendant-v3':
+          data = await getAllGroupsAndProjectsDescendantV3(Number(groupID))
+          break
+        case 'dfs':
+          data = await getAllGroupsAndProjectsDFS(Number(groupID))
+          break
+        case 'descendant-par':
+          data = await getAllGroupsAndProjectsDescendantPar(Number(groupID))
+          break
+        case 'descendant-seq':
+          data = await getAllGroupsAndProjectsDescendantSeq(Number(groupID))
+          break
+        default:
+          throw new Error('Invalid search method')
+      }
       const t1 = performance.now()
       setTime(t1 - t0)
       return data
@@ -36,8 +54,6 @@ export default function Home() {
     const formData = new FormData(event.currentTarget)
     const groupID = formData.get('group-id') as string
     setGroupID(groupID.trim())
-    const searchMethodOption = formData.get('search-method') as string
-    setSearchMethod(searchMethodOption === 'dfs' ? 'dfs' : 'descendant')
     if (query.isFetched) {
       query.refetch()
     }
@@ -52,13 +68,15 @@ export default function Home() {
         </Label>
         <Label className="flex flex-col items-start" htmlFor="search-method">
           Search Method
-          <Select name="search-method" defaultValue="descendant" onValueChange={value => setSearchMethod(value as 'dfs' | 'descendant')}>
+          <Select name="search-method" defaultValue="descendant-v3" onValueChange={value => setSearchMethod(value as SearchMethod)}>
             <SelectTrigger>
               <SelectValue placeholder="Method" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="dfs">DFS</SelectItem>
-              <SelectItem value="descendant">Descendant Groups</SelectItem>
+              <SelectItem value="descendant-seq">Descendant Groups Sequential</SelectItem>
+              <SelectItem value="descendant-par">Descendant Groups Parallel</SelectItem>
+              <SelectItem value="descendant-v3">Descendant Groups V3</SelectItem>
             </SelectContent>
           </Select>
         </Label>
