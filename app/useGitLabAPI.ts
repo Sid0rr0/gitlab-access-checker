@@ -1,13 +1,41 @@
+'use server'
+
 export default async function callGitLabAPI(endpoint: string) {
-  const data = await fetch(process.env.NEXT_PUBLIC_GITLAB_API_URL as string + endpoint, {
-    headers: {
-      Authorization: `Bearer ${process.env.NEXT_PUBLIC_GITLAB_API_TOKEN}`,
-    },
-  })
+  let hasNextPage = true
+  const allData = []
+  let page = 1
 
-  // TODO check for headers for pagination
+  while (hasNextPage) {
+    try {
+      const response = await fetch(process.env.NEXT_PUBLIC_GITLAB_API_URL as string + endpoint + '?per_page=100&page=' + page, {
+        headers: {
+          Authorization: `Bearer ${process.env.GITLAB_API_TOKEN}`,
+        },
+      })
 
-  return await data.json()
+      const data = await response.json()
+
+      if (response.headers.get('x-next-page')) {
+        allData.push(...data)
+        page += 1
+      }
+      else {
+        if (data.length > 0) {
+          allData.push(...data)
+          hasNextPage = false
+          continue
+        }
+
+        return data
+      }
+    }
+    catch (error) {
+      console.error('Error fetching data from GitLab API:', error)
+      throw new Error('Failed to fetch data from GitLab API')
+    }
+  }
+
+  return allData
 }
 
 type GitLabGroup = {
@@ -116,7 +144,6 @@ async function getProjectMembers(project: {
       })
     }
   }
-  // return data?.map((user: GitLabUser) => ({ id: user.id, name: user.name, username: user.username, accessLevel: user.access_level }))
 }
 
 async function getDescendantGroup(groupId: number) {
