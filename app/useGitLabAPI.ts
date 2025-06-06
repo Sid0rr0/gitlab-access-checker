@@ -74,6 +74,7 @@ type UserData = {
   projects: string[]
 }
 
+// Gets all groups and projects recursively using DFS and fetches group and projects members
 export async function getAllGroupsAndProjectsDFS(initialGroupId: number) {
   const usersMap = new Map<number, UserData>()
 
@@ -166,6 +167,7 @@ async function getDescendantGroup(groupId: number) {
   return data?.map((subgroup: { id: number, name: string }) => ({ id: subgroup.id, name: subgroup.name }))
 }
 
+// Gets all subgroups with `/groups/:id/descendant_groups` and fetches group and projects members
 export async function getAllGroupsAndProjectsDescendant(initialGroupId: number) {
   const usersMap = new Map<number, UserData>()
 

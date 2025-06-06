@@ -1,4 +1,12 @@
+# GitLab Access Checker
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+
+Created for [Apploud](https://apploud.cz).
+
+## Assignment
+
+[assignment](./assignment.md)
 
 ## Getting Started
 
