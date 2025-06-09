@@ -1,6 +1,6 @@
 'use server'
 
-export default async function callGitLabAPI(endpoint: string) {
+export default async function callGitLabAPI(endpoint: string, token: string) {
   let hasNextPage = true
   const allData = []
   let page = 1
@@ -13,11 +13,16 @@ export default async function callGitLabAPI(endpoint: string) {
 
       const response = await fetch(url, {
         headers: {
-          Authorization: `Bearer ${process.env.GITLAB_API_TOKEN}`,
+          // Authorization: `Bearer ${process.env.GITLAB_API_TOKEN}`,
+          Authorization: `Bearer ${token}`,
         },
       })
 
       const data = await response.json()
+
+      if (!response.ok) {
+        return Promise.reject(Error(`GitLab API error ${response.status} ${response.statusText}`))
+      }
 
       if (response.headers.get('x-next-page')) {
         allData.push(...data)
@@ -35,7 +40,7 @@ export default async function callGitLabAPI(endpoint: string) {
     }
     catch (error) {
       console.error('Error fetching data from GitLab API:', error)
-      throw new Error('Failed to fetch data from GitLab API')
+      return Promise.reject(Error('Failed to fetch data from GitLab API', { cause: error }))
     }
   }
 
@@ -84,53 +89,47 @@ export type UserData = {
 }
 
 // Gets all groups and projects recursively using DFS and fetches group and projects members
-export async function getAllGroupsAndProjectsDFS(initialGroupId: number) {
+export async function getAllGroupsAndProjectsDFS(initialGroupId: number, token: string) {
   const usersMap = new Map<number, UserData>()
 
   const visitedGroups = new Set<number>()
   const stack: GitLabGroup[] = []
 
-  stack.push(await getGroupDetails(initialGroupId))
+  stack.push(await getGroupDetails(initialGroupId, token))
 
   while (stack.length > 0) {
     const group = stack.pop() as GitLabGroup
     if (visitedGroups.has(group.id)) continue
 
     visitedGroups.add(group.id)
-    const [projectsPromise, subgroupsPromise] = await Promise.allSettled([
-      callGitLabAPI(`/groups/${group.id}/projects`),
-      callGitLabAPI(`/groups/${group.id}/subgroups`),
-      getGroupMembers(group, usersMap),
+    const [projects, subgroups] = await Promise.all([
+      callGitLabAPI(`/groups/${group.id}/projects`, token),
+      callGitLabAPI(`/groups/${group.id}/subgroups`, token),
+      getGroupMembers(group, usersMap, token),
     ])
 
-    if (projectsPromise.status === 'fulfilled' && projectsPromise.value) {
-      const projects = projectsPromise.value
-      for (const project of projects) {
-        await getProjectMembers(project, usersMap)
-      }
+    for (const project of projects) {
+      await getProjectMembers(project, usersMap, token)
     }
 
-    if (subgroupsPromise.status === 'fulfilled' && subgroupsPromise.value) {
-      const subgroups = subgroupsPromise.value as GitLabGroup[]
-      for (const subgroup of subgroups) {
-        stack.push({ id: subgroup.id, name: subgroup.name })
-      }
+    for (const subgroup of subgroups) {
+      stack.push({ id: subgroup.id, name: subgroup.name })
     }
   }
 
   return Array.from(usersMap.values())
 }
 
-async function getGroupDetails(groupId: number) {
-  const data = await callGitLabAPI(`/groups/${groupId}`)
+async function getGroupDetails(groupId: number, token: string) {
+  const data = await callGitLabAPI(`/groups/${groupId}`, token)
   return {
     id: data.id,
     name: data.name,
   }
 }
 
-async function getGroupMembers(group: { id: number, name: string }, usersMap: Map<number, UserData>) {
-  const members: GitLabMember[] = await callGitLabAPI(`/groups/${group.id}/members`)
+async function getGroupMembers(group: { id: number, name: string }, usersMap: Map<number, UserData>, token: string) {
+  const members: GitLabMember[] = await callGitLabAPI(`/groups/${group.id}/members`, token)
 
   for (const member of members) {
     const existingUser = usersMap.get(member.id)
@@ -152,8 +151,8 @@ async function getGroupMembers(group: { id: number, name: string }, usersMap: Ma
 async function getProjectMembers(project: {
   id: number
   name: string
-}, usersMap: Map<number, UserData>) {
-  const projectMembers: GitLabMember[] = await callGitLabAPI(`/projects/${project.id}/members`)
+}, usersMap: Map<number, UserData>, token: string) {
+  const projectMembers: GitLabMember[] = await callGitLabAPI(`/projects/${project.id}/members`, token)
   for (const projectMember of projectMembers) {
     const existingUser = usersMap.get(projectMember.id)
     if (existingUser) {
@@ -171,86 +170,83 @@ async function getProjectMembers(project: {
   }
 }
 
-async function getDescendantGroup(groupId: number) {
-  const data = await callGitLabAPI(`/groups/${groupId}/descendant_groups`)
+async function getDescendantGroup(groupId: number, token: string) {
+  const data = await callGitLabAPI(`/groups/${groupId}/descendant_groups`, token)
   return data?.map((subgroup: { id: number, name: string }) => ({ id: subgroup.id, name: subgroup.name }))
 }
 
 // Gets all subgroups with `/groups/:id/descendant_groups` and parrallelly fetches subgroups and projects members
-export async function getAllGroupsAndProjectsDescendantPar(initialGroupId: number) {
+export async function getAllGroupsAndProjectsDescendantPar(initialGroupId: number, token: string) {
   const usersMap = new Map<number, UserData>()
 
-  const initialGroup = await getGroupDetails(initialGroupId)
-  const subgroups = await getDescendantGroup(initialGroupId)
+  const initialGroup = await getGroupDetails(initialGroupId, token)
+  const subgroups = await getDescendantGroup(initialGroupId, token)
   const allGroups = [initialGroup, ...subgroups]
 
   const groupProcessingPromises = allGroups.map(async (group) => {
-    const [projectsResult] = await Promise.allSettled([
-      callGitLabAPI(`/groups/${group.id}/projects`),
-      getGroupMembers(group, usersMap),
+    const [projects] = await Promise.all([
+      callGitLabAPI(`/groups/${group.id}/projects`, token),
+      getGroupMembers(group, usersMap, token),
     ])
 
-    if (projectsResult.status === 'fulfilled' && projectsResult.value) {
-      const projects: GitLabProject[] = projectsResult.value
-      const projectMemberPromises = projects.map(project => getProjectMembers(project, usersMap))
-      await Promise.allSettled(projectMemberPromises)
-    }
+    const projectMemberPromises = projects.map((project: GitLabProject) => getProjectMembers(project, usersMap, token))
+    await Promise.all(projectMemberPromises)
   })
 
-  await Promise.allSettled(groupProcessingPromises)
+  await Promise.all(groupProcessingPromises)
 
   return Array.from(usersMap.values())
 }
 
 // Gets all subgroups with `/groups/:id/descendant_groups` and parrallelly fetches subgroups and projects members
-export async function getAllGroupsAndProjectsDescendantV3(initialGroupId: number) {
-  const usersMap = new Map<number, UserData>()
+export async function getAllGroupsAndProjectsDescendantV3(initialGroupId: number, token: string) {
+  try {
+    const usersMap = new Map<number, UserData>()
 
-  const [
-    initialGroupDetailsResult,
-    descendantGroupsResult,
-    allProjectsInInitialGroupTreeResult, // Projects from initial group and its subgroups
-  ] = await Promise.allSettled([
-    getGroupDetails(initialGroupId),
-    getDescendantGroup(initialGroupId),
-    callGitLabAPI(`/groups/${initialGroupId}/projects?include_subgroups=true`),
-  ])
+    const [
+      initialGroupDetailsResult,
+      descendantGroupsResult,
+      allProjectsInInitialGroupTreeResult, // Projects from initial group and its subgroups
+    ] = await Promise.all([
+      getGroupDetails(initialGroupId, token),
+      getDescendantGroup(initialGroupId, token),
+      callGitLabAPI(`/groups/${initialGroupId}/projects?include_subgroups=true`, token),
+    ])
 
-  const allPromises: Promise<void>[] = []
+    const allPromises: Promise<void>[] = []
 
-  if (initialGroupDetailsResult.status === 'fulfilled' && descendantGroupsResult.status === 'fulfilled') {
-    const allGroups = [initialGroupDetailsResult.value, ...descendantGroupsResult.value]
+    const allGroups = [initialGroupDetailsResult, ...descendantGroupsResult]
     for (const group of allGroups) {
-      allPromises.push(getGroupMembers(group, usersMap))
+      allPromises.push(getGroupMembers(group, usersMap, token))
     }
-  }
 
-  if (allProjectsInInitialGroupTreeResult.status === 'fulfilled') {
-    const projects = allProjectsInInitialGroupTreeResult.value
-    for (const project of projects) {
-      allPromises.push(getProjectMembers(project, usersMap))
+    for (const project of allProjectsInInitialGroupTreeResult) {
+      allPromises.push(getProjectMembers(project, usersMap, token))
     }
+
+    await Promise.all(allPromises)
+
+    return Array.from(usersMap.values())
   }
-
-  await Promise.allSettled(allPromises)
-
-  return Array.from(usersMap.values())
+  catch (error) {
+    throw error
+  }
 }
 
 // Gets all subgroups with `/groups/:id/descendant_groups` and sequentially fetches subgroups and projects members
-export async function getAllGroupsAndProjectsDescendantSeq(initialGroupId: number) {
+export async function getAllGroupsAndProjectsDescendantSeq(initialGroupId: number, token: string) {
   const usersMap = new Map<number, UserData>()
 
-  const initialGroup = await getGroupDetails(initialGroupId)
-  const subgroups = await getDescendantGroup(initialGroupId)
+  const initialGroup = await getGroupDetails(initialGroupId, token)
+  const subgroups = await getDescendantGroup(initialGroupId, token)
   const allGroups = [initialGroup, ...subgroups]
 
   for (const group of allGroups) {
-    await getGroupMembers(group, usersMap)
+    await getGroupMembers(group, usersMap, token)
 
-    const projects = await callGitLabAPI(`/groups/${group.id}/projects`)
+    const projects = await callGitLabAPI(`/groups/${group.id}/projects`, token)
     for (const project of projects) {
-      await getProjectMembers(project, usersMap)
+      await getProjectMembers(project, usersMap, token)
     }
   }
 

@@ -18,9 +18,6 @@ export default function Home() {
           <GroupForm />
 
         </main>
-        <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-          <span>GitLab Access Checker</span>
-        </footer>
       </div>
     </QueryClientProvider>
   )

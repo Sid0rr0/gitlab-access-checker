@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   getAllGroupsAndProjectsDFS,
   getAllGroupsAndProjectsDescendantPar,
@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import UserData from './UserData'
+import Link from 'next/link'
 
 enum SearchMethod {
   DFS = 'dfs',
@@ -45,24 +46,32 @@ export default function Home() {
   const [groupID, setGroupID] = useState<string | null>(null)
   const [searchMethod, setSearchMethod] = useState<SearchMethod>(DEFAULT_SEARCH_METHOD)
   const [time, setTime] = useState<number | null>(null)
+  const [gitlabApiToken, setGitlabApiToken] = useState<string>('')
+
+  useEffect(() => {
+    const storedApiKey = localStorage.getItem('gitlab-access-token')
+    if (storedApiKey) {
+      setGitlabApiToken(storedApiKey)
+    }
+  }, [])
 
   const query = useQuery({
-    queryKey: ['group-members'],
+    queryKey: ['group-members', groupID],
     queryFn: async () => {
       const t0 = performance.now()
       let data = null
       switch (searchMethod) {
         case SearchMethod.DescendantV3:
-          data = await getAllGroupsAndProjectsDescendantV3(Number(groupID))
+          data = await getAllGroupsAndProjectsDescendantV3(Number(groupID), gitlabApiToken)
           break
         case SearchMethod.DFS:
-          data = await getAllGroupsAndProjectsDFS(Number(groupID))
+          data = await getAllGroupsAndProjectsDFS(Number(groupID), gitlabApiToken)
           break
         case SearchMethod.DescendantParallel:
-          data = await getAllGroupsAndProjectsDescendantPar(Number(groupID))
+          data = await getAllGroupsAndProjectsDescendantPar(Number(groupID), gitlabApiToken)
           break
         case SearchMethod.DescendantSequential:
-          data = await getAllGroupsAndProjectsDescendantSeq(Number(groupID))
+          data = await getAllGroupsAndProjectsDescendantSeq(Number(groupID), gitlabApiToken)
           break
         default:
           throw new Error('Invalid search method')
@@ -110,10 +119,18 @@ export default function Home() {
             </SelectContent>
           </Select>
         </Label>
-        <Button type="submit" className="cursor-pointer" disabled={query.isFetching}>
+        <Button type="submit" className="cursor-pointer" disabled={query.isFetching || !gitlabApiToken}>
           Check Access
         </Button>
       </form>
+
+      {!gitlabApiToken && (
+        <p className="text-gray-500">
+          Set your GitLab Access Token in the
+          {' '}
+          <Link href="/settings">Settings</Link>
+        </p>
+      )}
 
       {query.isFetching
         ? (
@@ -134,6 +151,14 @@ export default function Home() {
               s
             </p>
           ))}
+
+      {query.isError && (
+        <p className="text-red-500">
+          Error fetching data:
+          {' '}
+          {query.error instanceof Error ? query.error.message : 'Unknown error'}
+        </p>
+      )}
 
       {query.data && <UserData data={query.data} />}
 
