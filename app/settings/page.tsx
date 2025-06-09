@@ -12,7 +12,7 @@ export default function Settings() {
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
-    const gitlabApiKey = formData.get('gitlab-access-token') as string
+    const gitlabApiKey = (formData.get('gitlab-access-token') as string).trim()
     if (gitlabApiKey) {
       localStorage.setItem('gitlab-access-token', gitlabApiKey)
       setGitlabApiKey(gitlabApiKey)
@@ -34,7 +34,7 @@ export default function Settings() {
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 w-full max-w-md">
           <Label className="flex flex-col gap-2 items-start">
             <span>GitLab Access token</span>
-            <Input type="text" name="gitlab-access-token" />
+            <Input type="text" name="gitlab-access-token" required />
           </Label>
           <Button type="submit" className="cursor-pointer">Save</Button>
         </form>

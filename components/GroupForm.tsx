@@ -128,7 +128,7 @@ export default function Home() {
         <p className="text-gray-500">
           Set your GitLab Access Token in the
           {' '}
-          <Link href="/settings">Settings</Link>
+          <Link className="underline" href="/settings">Settings</Link>
         </p>
       )}
 
