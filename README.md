@@ -2,11 +2,19 @@
 
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+This application is a GitLab access control that checks for access to groups and projects within a specified top-level group, outputting detailed user information and membership levels.
+
 Created for [Apploud](https://apploud.cz).
 
 ## Assignment
 
 [assignment](./assignment.md)
+
+## Comments
+
+In the app you can chose from various methods of search, which document my approach to the problem, iterating and improving the code as I went along.
+
+From DFS approch (before fully reading through GitLab API docs), which traverses the tree and collects all the users , to `getAllGroupsAndProjectsDescendantV3` using concurrent requests to speed up the process and `/groups/:groupID/projects?include_subgroups=true` to fetch all projects in the group and its subgroups in one request.
 
 ## Getting Started
 
