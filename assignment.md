@@ -1,36 +1,3 @@
-Konverzace byla otevřena. 1 přečtená zpráva.
-
-Přeskočit na obsah
-Jak používat Gmail se čtečkou obrazovky
-Testovací zadání - Apploud
-Doručená pošta
-
-Jan David <honza@apploud.cz>
-Přílohy
-2. 6. 2025 12:30 (před 4 dny)
-komu: mně
-
-Dobrý den,
-díky za dnešní příjemný pohovor! V příloze zasílám testovací zadání dle domluvy - prosím napište to v Next.js
-
-Pokud byste měl nějaké otázky, dejte vědět.
-
-Honza
-
-
-
-
-Jan David
-Managing Partner
- 	 	 	 	 
-e-mail	 	mobile	 	web
-jan.david@apploud.cz	 	702 999 666	 	apploud.cz
-Apploud.cz		
-
- 
-
- Jedna příloha
-  •  Zkontrolováno Gmailem
 # Zadání
 
 Potřebujeme nástroj, kterým budeme kontrolovat, že nikdo nepovolaný nemá přístup k našim skupinám a projektům v Gitlabu.
@@ -92,5 +59,3 @@ Testovací prostředí má 5 uživatelů, 5 skupin (včetně top-level) a 4 proj
 Je potřeba využít Gitlab REST API, nikoli GraphQL. Jeho dokumentace je zde: https://docs.gitlab.com/ee/api/
 
 Gitlab API nabízí endpoint https://docs.gitlab.com/api/users/#list-projects-and-groups-that-a-user-is-a-member-of , ke kterému ovšem nemáte administrátorský access token. Principem úkolu je porozumění API, stažení dat a jejich spojení. 
-apploud-testovaci-zadani-fe.md
-Zobrazování položky apploud-testovaci-zadani-fe.md.
